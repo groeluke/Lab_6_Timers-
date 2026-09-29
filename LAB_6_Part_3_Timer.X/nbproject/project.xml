@@ -3,20 +3,18 @@
     <type>com.microchip.mplab.nbide.embedded.makeproject</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/make-project/1">
-            <name>LAB_6_Part_2_Timer</name>
-            <creation-uuid>fccb924b-1e31-4548-abf2-6962bd1d049d</creation-uuid>
+            <name>LAB_6_Part_3_Timer</name>
+            <creation-uuid>6a002654-20bb-4666-86bd-acd91fa1a8dc</creation-uuid>
             <make-project-type>0</make-project-type>
-            <sourceEncoding>ISO-8859-1</sourceEncoding>
             <make-dep-projects/>
-            <sourceRootList>
-                <sourceRootElem>.</sourceRootElem>
-            </sourceRootList>
+            <sourceRootList/>
             <confList>
                 <confElem>
                     <name>default</name>
                     <type>2</type>
                 </confElem>
             </confList>
+            <sourceEncoding>ISO-8859-1</sourceEncoding>
             <formatting>
                 <project-formatting-style>false</project-formatting-style>
             </formatting>
