@@ -11,7 +11,7 @@
 # All addresses and the length are given in unqualified hexadecimal
 # in delta units.  Any other numeric values are decimal.
 %PSECTS
-$build/default/debug/main.o
+$build/default/production/main.o
 code CODE 0 8 8 6D 2 1
 resetVect CODE 0 0 0 1 2 1
 isrVect CODE 0 4 4 1 2 1
@@ -63,7 +63,7 @@ STRING 75-FFF 2
 # are in ascending order of addresses.
 # All other numeric values are in decimal.
 %LINETAB
-$build/default/debug/main.o
+$build/default/production/main.o
 4 isrVect CODE >41:C:\Users\lukeg\Documents\github\Lab6\LAB_6_Part_3_Timer.X\main.S
 0 resetVect CODE >36:C:\Users\lukeg\Documents\github\Lab6\LAB_6_Part_3_Timer.X\main.S
 8 code CODE >48:C:\Users\lukeg\Documents\github\Lab6\LAB_6_Part_3_Timer.X\main.S

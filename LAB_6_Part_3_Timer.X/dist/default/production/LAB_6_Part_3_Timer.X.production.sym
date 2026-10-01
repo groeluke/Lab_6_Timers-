@@ -38,7 +38,7 @@ resetVect 0 1 CODE 0 0
 isrVect 8 9 CODE 8 0
 code 10 E9 CODE 10 0
 %locals
-build/default/debug/main.o
+build/default/production/main.o
 main.S
 48 8 0 CODE 0
 49 A 0 CODE 0

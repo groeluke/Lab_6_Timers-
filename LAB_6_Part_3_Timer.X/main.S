@@ -49,54 +49,43 @@ Setup:
     CLRF    TRISA                  ;RA0-RA5 all outputs (six traffic-light LEDs)
     CLRF    TRISC                  ;PORTC all outputs (state display)
     BSF     PIE1,0                 ;enable Timer1 interrupt (TMR1IE)
-
     ;          Bank 3
     BANKSEL ANSEL
     CLRF    ANSEL                  ;RA0-RA5 digital
     CLRF    ANSELH
-
     ;          Bank 0
     BANKSEL PORTA
     CLRF    PORTA                  ;lights off - first main pass sets the real pattern
     CLRF    PORTC
     CLRF    intersection_state     ;count=0, N/S green, no transition, flags clear
-
-    MOVLW   0x0B                   ;
+    MOVLW   0x0B                   
     MOVWF   TMR1H                  ;preload for a 500 ms period, high byte
-    MOVLW   0xDC                   ;
+    MOVLW   0xDC                   
     MOVWF   TMR1L                  ;preload low byte
     BCF     PIR1,0                 ;clear TMR1IF before starting
-
     BCF     INTCON,4               ;Part 2's external INT stays off in Part 3
     BCF     INTCON,3               ;Part 2's PORTB IOC stays off in Part 3
- 
     MOVLW   0b00110001             ;setup prescale 1:8,internal clock,Timer1 ON
     MOVWF   T1CON                  ;turn on the prescaler and Timer1
-
     BSF     INTCON,6               ;Timer1 is a peripheral interrupt
     BSF     INTCON,7               ;global interrupts enable
     
 Main:
     MOVF    intersection_state,W
     MOVWF   PORTC                  ;what state of the LEDs on PortC, every pass
-
     CALL    Decode_Lights          ;keeps or changes based on what occurs every pass
-    
     SWAPF   intersection_state,W
     ANDLW   0x0F                   ;pull STATE_COUNT into TEMP_COUNTANDLW 0x0F
                                    ;then wipes out the garbage left in the top half
     MOVWF   TEMP_COUNT             ;save the ANDLW in TEMP_COUNT to compare
-
     MOVF    TEMP_COUNT,W
     XORLW   10
     BTFSC   STATUS,2               ;count is 10 which will be 5.0 s of green elapsed
     CALL    Decide                 ;after 5s we need to decide to change to yellow
-
     MOVF    TEMP_COUNT,W
     XORLW   12                     ;2 more interrupts atter the 10
     BTFSC   STATUS,2               ;count is 12 which will be 1.0 s of yellow elapsed
     CALL    Finish                 ;after 1s we need to decide to what direction to change
-
     GOTO    Main
 
 ;Decide: figures out whether to keep the current light green or
@@ -104,7 +93,7 @@ Main:
     
 Decide:
     BCF      INTCON,7              ;Turn of the gobel interrupt to make sure operration happens
-    BTFSS    intersection_state,3  ;is TRANSITION bit set high = skip
+    BTFSC    intersection_state,3  ;is TRANSITION bit set low = skip
     GOTO     Done                  ;dont do anything
     BTFSS    intersection_state,0  ;look which direction is green N/S=0, E/W=1
     GOTO     NS_Green               
@@ -208,7 +197,7 @@ Service_Timer1:
     MOVWF TMR1H                    ;load into the higher Timer1 bits
     MOVLW 0xDC                     ;reload timer one with the rrest of the count
     MOVWF TMR1L                    ;load into the lower Timer1 bits
-    MOVWF 0x10                     ;increment the upper bits if intersection_state
+    MOVLW 0x10                     ;increment the upper bits if intersection_state
     ADDWF intersection_state,F     ;add increments the upper bits
     RETURN                         ;return to ISR
     
