@@ -2340,13 +2340,10 @@ auto_size SET 0
 ENDM
 # 8 "C:\\Program Files\\Microchip\\xc8\\v3.10\\pic\\include/xc.inc" 2 3
 # 28 "main.S" 2
- W_TEMP EQU 0x70 ;saved W during ISR
-   STATUS_TEMP EQU 0x71 ;saved swapped STATUS during ISR
-   OLD_PORTB EQU 0x72 ;PORTB snapshot from previous IOC event
-   CURR_PORTB EQU 0x73 ;current PORTB read, this IOC event
-   RISING_BITS EQU 0x74 ;bits that changed AND are now high
-   TEMP_COUNT EQU 0x75 ;STATE_COUNT extracted in main, this pass
-   intersection_state EQU 0x76 ;the packed state byte
+ W_TEMP EQU 0x70 ;save W during ISR
+   STATUS_TEMP EQU 0x71 ;save STATUS during ISR
+   TEMP_COUNT EQU 0x72 ;STATE_COUNT read out in main
+   intersection_state EQU 0x73 ;the packed state byte
 
 ; Reset Vector at 0000h. Execution starts here after reset.
 PSECT resetVect,class=CODE,delta=2
@@ -2363,97 +2360,139 @@ PSECT code,class=CODE,delta=2
 
 Setup:
     ; Bank 1
-    BANKSEL TRISB
-    BSF TRISB,0 ;set ((PORTB) and 07Fh), 0 as input
-    BSF TRISB,4 ;set ((PORTB) and 07Fh), 4 as N/S sensor input
-    BSF TRISB,5 ;set ((PORTB) and 07Fh), 5 as E/W sensor input
-    CLRF TRISC ;portC asll outputs for LEDs
-    BANKSEL OPTION_REG
-    BCF OPTION_REG,6 ;interrupt on a falling edge on ((PORTB) and 07Fh), 0/INT
-    BSF IOCB,4 ;watch ((PORTB) and 07Fh), 4 for changes
-    BSF IOCB,5 ;watch ((PORTB) and 07Fh), 5 for changes
+    BANKSEL TRISA
+    CLRF TRISA ;((PORTA) and 07Fh), 0 -((PORTA) and 07Fh), 5 all outputs (six traffic-light LEDs)
+    CLRF TRISC ;PORTC all outputs (state display)
+    BSF PIE1,0 ;enable Timer1 interrupt (((PIE1) and 07Fh), 0)
+
     ; Bank 3
     BANKSEL ANSEL
-    CLRF ANSEL
-    CLRF ANSELH ;set digital I/O
-    ; Bank 0
-    BANKSEL PORTC
-    CLRF PORTC ;clear portC outputs to a known state
-    CLRF intersection_state ;set STATE_COUNT=0, DIRECTION=0(N/S), TRANSITION=0, flags cleared
-    MOVF PORTB,W ;set a basline PortB reading
-    MOVWF OLD_PORTB ;reports the sensor that actually changed
+    CLRF ANSEL ;((PORTA) and 07Fh), 0 -((PORTA) and 07Fh), 5 digital
+    CLRF ANSELH
 
-    BCF INTCON,0 ;clear the change on PortB interrrupt flag
-    BCF INTCON,1 ;clear the external interrupt flag
-    BSF INTCON,3 ;enable change on PortB interrupt enable bit
-    BSF INTCON,4 ;enable external interrupt enable bit
+    ; Bank 0
+    BANKSEL PORTA
+    CLRF PORTA ;lights off - first main pass sets the real pattern
+    CLRF PORTC
+    CLRF intersection_state ;count=0, N/S green, no transition, flags clear
+
+    MOVLW 0x0B ;
+    MOVWF TMR1H ;preload for a 500 ms period, high byte
+    MOVLW 0xDC ;
+    MOVWF TMR1L ;preload low byte
+    BCF PIR1,0 ;clear ((PIR1) and 07Fh), 0 before starting
+
+    BCF INTCON,4 ;Part 2's external INT stays off in Part 3
+    BCF INTCON,3 ;Part 2's PORTB IOC stays off in Part 3
+
+    MOVLW 0b00110001 ;setup prescale 1:8,internal clock,Timer1 ON
+    MOVWF T1CON ;turn on the prescaler and Timer1
+
+    BSF INTCON,6 ;Timer1 is a peripheral interrupt
     BSF INTCON,7 ;global interrupts enable
 
 Main:
     MOVF intersection_state,W
-    MOVWF PORTC ;display the complete packed state, every pass
+    MOVWF PORTC ;what state of the LEDs on PortC, every pass
+
+    CALL Decode_Lights ;keeps or changes based on what occurs every pass
 
     SWAPF intersection_state,W
-    ANDLW 0x0F ;isolate STATE_COUNT into the low 4 bits
+    ANDLW 0x0F ;pull STATE_COUNT into TEMP_COUNTANDLW 0x0F
+                                   ;then wipes out the garbage left in the top half, leaving a
+                                   ;clean 0-15 number
     MOVWF TEMP_COUNT
 
     MOVF TEMP_COUNT,W
-    XORLW 3
-    BTFSC STATUS,2 ;set if STATE_COUNT 3
-    CALL Decide_State3
+    XORLW 10
+    BTFSC STATUS,2 ;count is 10 which will be 5.0 s of green elapsed
+    CALL Decide ;after 5s we need to decide to change to yellow
 
     MOVF TEMP_COUNT,W
-    XORLW 4
-    BTFSC STATUS,2 ;set if STATE_COUNT 4
-    CALL Complete_Transition
+    XORLW 12
+    BTFSC STATUS,2 ;count is 12 which will be 1.0 s of yellow elapsed
+    CALL Finish ;after 1s we need to decide to what direction to change
+
     GOTO Main
 
-Decide_State3:
-    BCF INTCON,7 ;protect this multi-step read/write
-    BTFSC intersection_state,3 ;check if TRANSITION is already set
-    GOTO D3_Done ;yes already changing, do nothing
-
-    BTFSS intersection_state,0 ;test DIRECTION
-    GOTO D3_EW_Green ;DIRECTION=1 -> E/W green path
-                                  ;DIRECTION=0 -> N/S green:
-    BTFSS intersection_state,1 ;NS_DETECTED?
-    GOTO D3_Change ;NS not detected -> change (0,0 / 0,1 cases)
-    BTFSC intersection_state,2 ;EW_DETECTED also set?
-    GOTO D3_Change ;both detected -> change (1,1 case)
-    GOTO D3_Remain ;NS only -> remain (1,0 case)
-
-D3_EW_Green:
-    BTFSS intersection_state,2 ;was EW_DETECTED
-    GOTO D3_Change ;EW not detected -> change
-    BTFSC intersection_state,1 ;was NS_DETECTED also set
-    GOTO D3_Change ;both detected -> change
-    GOTO D3_Remain ;EW only -> remain
-
-D3_Remain:
-    MOVF intersection_state,W
-    ANDLW 0x09 ;keep DIRECTION bit0 and TRANSITION(bit3, =0 here)
-    MOVWF intersection_state ;clears STATE_COUNT, NS_DETECTED, EW_DETECTED
-    GOTO D3_Done
-
-D3_Change:
-    BSF intersection_state,3 ;set TRANSITION abou to change to yellow
-
-D3_Done:
-    BSF INTCON,7 ;turn interrupts back on
-    RETURN
-
-Complete_Transition:
-    BCF INTCON,7 ;protect the rewrite
-    BTFSS intersection_state,0 ;which direction was green?
-    GOTO CT_ToEW ;was N/S - switch to E/W
-    CLRF intersection_state ;was E/W - new state is all zero (N/S green)
-    GOTO CT_Done
-CT_ToEW:
+Decide:
+    BCF INTCON,7 ;Turn of the gobel interrupt to make sure operration happens
+    BTFSS intersection_state,3 ;is the yellow flag on
+    GOTO Done ;dont do anything
+    BTFSS intersection_state,0 ;look which direction is green N/S=0, E/W=1
+    GOTO NS_Green
+EW_Green:
+    BTFSS intersection_state,2 ;
+    GOTO Change ;
+    BTFSS intersection_state,1 ;
+    GOTO Remain ;
+    GOTO Change ;
+NS_Green:
+    BTFSS intersection_state,1 ;
+    GOTO Change ;
+    BTFSS intersection_state,2 ;
+    GOTO Remain ;
+Change:
+    BSF intersection_state,3 ;
+    GOTO Done ;
+Remain:
+    BTFSS intersection_state,0 ;
+    GOTO NS_Remain ;
+EW_Remain:
+    CLRF intersection_state ;clear everything
+    BSF intersection_state,0 ;only select direction E/W
+    GOTO Done ;
+NS_Remain:
+    CLRF intersection_state ;
+Done:
+    BSF INTCON,7 ;
+    RETURN ;
+Finish:
+    BCF INTCON,7 ;protect this the same way Decide does
+    BTFSS intersection_state,0 ;which way was green before this?
+    GOTO ToEW ;bit was 0 - was N/S, switch to E/W
+    CLRF intersection_state ;bit was 1 - was E/W, back to N/S green, count reset to 0
+    GOTO FinishDone
+ToEW:
     MOVLW 0x01
-    MOVWF intersection_state ;new state: E/W green, everything else 0
-CT_Done:
+    MOVWF intersection_state ;now E/W green, everything else reset to 0
+FinishDone:
     BSF INTCON,7 ;interrupts back on
     RETURN
+
+; Decode_Lights: looks at DIRECTION and TRANSITION and turns on
+; the matching traffic lights on PORTA. Called every pass through
+; Main so PORTA always matches the current state.
+
+Decode_Lights:
+    BTFSS intersection_state,3 ;is TRANSITION (yellow flag) on?
+    GOTO Green_Phase ;no we're in a green/red phase
+    GOTO Yellow_Phase ;yes we're in a yellow/red phase
+Green_Phase:
+    BTFSS intersection_state,0 ;which way is green?
+    GOTO Set_NSGreen ;bit was 0 N/S green
+    GOTO Set_EWGreen ;bit was 1 E/W green
+Yellow_Phase:
+    BTFSS intersection_state,0
+    GOTO Set_NSYellow
+    GOTO Set_EWYellow
+Set_NSGreen:
+    MOVLW 0x0C ;((PORTA) and 07Fh), 2 on (N/S green), ((PORTA) and 07Fh), 3 on (E/W red)
+    GOTO Store_Lights
+Set_EWGreen:
+    MOVLW 0x21 ;((PORTA) and 07Fh), 0 on (N/S red), ((PORTA) and 07Fh), 5 on (E/W green)
+    GOTO Store_Lights
+Set_NSYellow:
+    MOVLW 0x0A ;((PORTA) and 07Fh), 1 on (N/S yellow), ((PORTA) and 07Fh), 3 on (E/W red)
+    GOTO Store_Lights
+Set_EWYellow:
+    MOVLW 0x11 ;((PORTA) and 07Fh), 0 on (N/S red), ((PORTA) and 07Fh), 4 on (E/W yellow)
+Store_Lights:
+    MOVWF PORTA ;takes moved values and then displays on the LEDs
+    RETURN
+
+; ISR - runs any time an interrupt fires. Right now the only thing
+; that should be able to interrupt is Timer1.
 
 IsrHandler:
     ; save
@@ -2462,12 +2501,8 @@ IsrHandler:
     MOVWF STATUS_TEMP ;save swapped STATUS
 
     ; button caused interrupt
-    BTFSC INTCON,1
-    CALL Service_INT
-
-    ; sensor change caused this
-    BTFSC INTCON,0
-    CALL Service_IOC
+    BTFSC PIR1,0
+    CALL Service_Timer1
 
     ; restore
     SWAPF STATUS_TEMP,W ;un-swap STATUS into W
@@ -2475,28 +2510,15 @@ IsrHandler:
     SWAPF W_TEMP,F ;swap W_TEMP nibbles in place
     SWAPF W_TEMP,W ;swap back into W, STATUS untouched
     RETFIE
-Service_INT:
-    MOVLW 0x10
-    ADDWF intersection_state,F ;add 0x10 which affects 7:4 and increments STATE_COUNT 0 through 15
-    BCF INTCON,1 ;clear button flag
-    RETURN
 
-Service_IOC:
-    MOVF PORTB,W ; read PORTB (clears the mismatch)
-    MOVWF CURR_PORTB
-    XORWF OLD_PORTB,W ; W = bits that changed
-    ANDWF CURR_PORTB,W ; W = changed AND now-high = rising edges only
-    MOVWF RISING_BITS
-
-    BTFSC RISING_BITS,4 ; ((PORTB) and 07Fh), 4 (N/S) rose?
-    BSF intersection_state,1 ; latch NS_DETECTED
-
-    BTFSC RISING_BITS,5 ; ((PORTB) and 07Fh), 5 (E/W) rose?
-    BSF intersection_state,2 ; latch EW_DETECTED
-
-    MOVF CURR_PORTB,W
-    MOVWF OLD_PORTB ; save for next time
-    BCF INTCON,0 ; clear sensor flag
+Service_Timer1:
+    BCF PIR1,0 ;
+    MOVLW 0x0B ;
+    MOVWF TMR1H ;
+    MOVLW 0xDC ;
+    MOVWF TMR1L ;
+    MOVWF 0x10 ;
+    ADDWF intersection_state,F ;
     RETURN
 
     End

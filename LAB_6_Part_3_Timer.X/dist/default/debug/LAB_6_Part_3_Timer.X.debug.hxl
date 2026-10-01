@@ -1,26 +1,26 @@
 ### HEXMate logfile and output summary ###
 
 ### Command-line arguments ###
- C:\Users\lukeg\AppData\Local\Temp\xcAsa7s.0\driver_tmp_3.o
- -Odist/default/debug\LAB_6_Part_2_Timer.X.debug.hex
- -logfile=dist/default/debug\LAB_6_Part_2_Timer.X.debug.hxl
+ C:\Users\lukeg\AppData\Local\Temp\xcAs1ec.0\driver_tmp_3.o
+ -Odist/default/debug\LAB_6_Part_3_Timer.X.debug.hex
+ -logfile=dist/default/debug\LAB_6_Part_3_Timer.X.debug.hxl
  -addressing=2
 
 ### Memory Usage ###
  Input file ranges:
-  0h - 1h		(C:\Users\lukeg\AppData\Local\Temp\xcAsa7s.0\driver_tmp_3.o)
-  8h - 9h		(C:\Users\lukeg\AppData\Local\Temp\xcAsa7s.0\driver_tmp_3.o)
-  10h - D7h		(C:\Users\lukeg\AppData\Local\Temp\xcAsa7s.0\driver_tmp_3.o)
-  400Eh - 4011h		(C:\Users\lukeg\AppData\Local\Temp\xcAsa7s.0\driver_tmp_3.o)
+  0h - 1h		(C:\Users\lukeg\AppData\Local\Temp\xcAs1ec.0\driver_tmp_3.o)
+  8h - 9h		(C:\Users\lukeg\AppData\Local\Temp\xcAs1ec.0\driver_tmp_3.o)
+  10h - E9h		(C:\Users\lukeg\AppData\Local\Temp\xcAs1ec.0\driver_tmp_3.o)
+  400Eh - 4011h		(C:\Users\lukeg\AppData\Local\Temp\xcAs1ec.0\driver_tmp_3.o)
  Unused ranges:
   2h - 7h
   Ah - Fh
-  D8h - 400Dh
+  EAh - 400Dh
 
 ### Hex Memory Map ###
  Legend:
   -- = Unused memory
-  H1 = Input file             (C:\Users\lukeg\AppData\Local\Temp\xcAsa7s.0\driver_tmp_3.o)
+  H1 = Input file             (C:\Users\lukeg\AppData\Local\Temp\xcAs1ec.0\driver_tmp_3.o)
 ----------------------------------------------------------
          | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
 ----------------------------------------------------------
@@ -37,7 +37,8 @@
 000000A0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
 000000B0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
 000000C0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
-000000D0 | H1 H1 H1 H1 H1 H1 H1 H1 -- -- -- -- -- -- -- --
+000000D0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+000000E0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 -- -- -- -- -- --
 ----------------------------------------------------------
 00004000 | -- -- -- -- -- -- -- -- -- -- -- -- -- -- H1 H1
 00004010 | H1 H1 -- -- -- -- -- -- -- -- -- -- -- -- -- --

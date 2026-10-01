@@ -94,25 +94,25 @@ Main:
     GOTO Main
 
 Decide_State3:
-    BCF     INTCON,7              ;protect this multi-step read/write
+    BCF     INTCON,7              ;disable the interrupts for read/write
     BTFSC   intersection_state,3  ;check if TRANSITION is already set
     GOTO    D3_Done               ;yes already changing, do nothing
 
     BTFSS   intersection_state,0  ;test DIRECTION
-    GOTO    D3_EW_Green           ;DIRECTION=1 -> E/W green path
-                                  ;DIRECTION=0 -> N/S green:
-    BTFSS   intersection_state,1  ;NS_DETECTED?
-    GOTO    D3_Change             ;NS not detected -> change (0,0 / 0,1 cases)
-    BTFSC   intersection_state,2  ;EW_DETECTED also set?
-    GOTO    D3_Change             ;both detected -> change (1,1 case)
-    GOTO    D3_Remain             ;NS only -> remain (1,0 case)
+    GOTO    D3_EW_Green           ;DIRECTION=1 goto E/W green path
+                                  ;DIRECTION=0 goto N/S green
+    BTFSS   intersection_state,1  ;is NS_DETECTED
+    GOTO    D3_Change             ;NS not detected goto change (0,0 / 0,1 cases)
+    BTFSC   intersection_state,2  ;is EW_DETECTED also set
+    GOTO    D3_Change             ;both detected goto change (1,1 case)
+    GOTO    D3_Remain             ;NS only goto remain (1,0 case)
     
 D3_EW_Green:
     BTFSS   intersection_state,2  ;was EW_DETECTED
-    GOTO    D3_Change             ;EW not detected -> change
+    GOTO    D3_Change             ;EW not detected goto change
     BTFSC   intersection_state,1  ;was NS_DETECTED also set
-    GOTO    D3_Change             ;both detected -> change
-    GOTO    D3_Remain             ;EW only -> remain
+    GOTO    D3_Change             ;both detected goto change
+    GOTO    D3_Remain             ;EW only goto remain
 
 D3_Remain:
     MOVF    intersection_state,W
@@ -121,7 +121,7 @@ D3_Remain:
     GOTO    D3_Done
 
 D3_Change:
-    BSF     intersection_state,3  ;set TRANSITION abou to change to yellow
+    BSF     intersection_state,3  ;set TRANSITION about to change to yellow
 
 D3_Done:
     BSF     INTCON,7              ;turn interrupts back on
@@ -130,12 +130,12 @@ D3_Done:
 Complete_Transition:
     BCF     INTCON,7              ;protect the rewrite
     BTFSS   intersection_state,0  ;which direction was green?
-    GOTO    CT_ToEW               ;was N/S - switch to E/W
-    CLRF    intersection_state    ;was E/W - new state is all zero (N/S green)
+    GOTO    CT_ToEW               ;was it N/S switch to E/W
+    CLRF    intersection_state    ;was E/W then new state is all zero (N/S green)
     GOTO    CT_Done
 CT_ToEW:
     MOVLW   0x01
-    MOVWF   intersection_state    ;new state: E/W green, everything else 0
+    MOVWF   intersection_state    ;if new state E/W green, everything else 0
 CT_Done:
     BSF     INTCON,7              ;interrupts back on
     RETURN
@@ -160,28 +160,29 @@ IsrHandler:
     SWAPF W_TEMP,F                ;swap W_TEMP nibbles in place
     SWAPF W_TEMP,W                ;swap back into W, STATUS untouched
     RETFIE
+    
 Service_INT:
-    SWAPF intersection_state,W    ;STATE_COUNT into low nibble
+    MOVLW 0x10
     ADDWF intersection_state,F    ;add 0x10 which affects 7:4 and increments STATE_COUNT 0 through 15
     BCF   INTCON,1                ;clear button flag
     RETURN
     
 Service_IOC:
-    MOVF    PORTB,W                 ; read PORTB (clears the mismatch)
+    MOVF    PORTB,W                 ;read PORTB (clears the mismatch)
     MOVWF   CURR_PORTB
-    XORWF   OLD_PORTB,W             ; W = bits that changed
-    ANDWF   CURR_PORTB,W            ; W = changed AND now-high = rising edges only
+    XORWF   OLD_PORTB,W             ;W= bits that changed
+    ANDWF   CURR_PORTB,W            ;W = changed AND now-high = rising edges only
     MOVWF   RISING_BITS
 
-    BTFSC   RISING_BITS,4           ; RB4 (N/S) rose?
-    BSF     intersection_state,1    ; latch NS_DETECTED
+    BTFSC   RISING_BITS,4           ;did RB4 (N/S) rose
+    BSF     intersection_state,1    ;latch NS_DETECTED
 
-    BTFSC   RISING_BITS,5           ; RB5 (E/W) rose?
-    BSF     intersection_state,2    ; latch EW_DETECTED
+    BTFSC   RISING_BITS,5           ;did RB5 (E/W) rose
+    BSF     intersection_state,2    ;latch EW_DETECTED
 
     MOVF    CURR_PORTB,W
-    MOVWF   OLD_PORTB                ; save for next time
-    BCF     INTCON,0                 ; clear sensor flag
+    MOVWF   OLD_PORTB               ;save for next time
+    BCF     INTCON,0                ;clear sensor flag
     RETURN
     
     End
