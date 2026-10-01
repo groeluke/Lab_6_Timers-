@@ -2399,9 +2399,8 @@ Main:
 
     SWAPF intersection_state,W
     ANDLW 0x0F ;pull STATE_COUNT into TEMP_COUNTANDLW 0x0F
-                                   ;then wipes out the garbage left in the top half, leaving a
-                                   ;clean 0-15 number
-    MOVWF TEMP_COUNT
+                                   ;then wipes out the garbage left in the top half
+    MOVWF TEMP_COUNT ;save the ANDLW in TEMP_COUNT to compare
 
     MOVF TEMP_COUNT,W
     XORLW 10
@@ -2409,44 +2408,51 @@ Main:
     CALL Decide ;after 5s we need to decide to change to yellow
 
     MOVF TEMP_COUNT,W
-    XORLW 12
+    XORLW 12 ;2 more interrupts atter the 10
     BTFSC STATUS,2 ;count is 12 which will be 1.0 s of yellow elapsed
     CALL Finish ;after 1s we need to decide to what direction to change
 
     GOTO Main
 
+;Decide: figures out whether to keep the current light green or
+;start switching it to yellow. Only runs when STATE_COUNT hits 10.
+
 Decide:
     BCF INTCON,7 ;Turn of the gobel interrupt to make sure operration happens
-    BTFSS intersection_state,3 ;is the yellow flag on
+    BTFSS intersection_state,3 ;is TRANSITION bit set high = skip
     GOTO Done ;dont do anything
     BTFSS intersection_state,0 ;look which direction is green N/S=0, E/W=1
     GOTO NS_Green
 EW_Green:
-    BTFSS intersection_state,2 ;
-    GOTO Change ;
-    BTFSS intersection_state,1 ;
-    GOTO Remain ;
-    GOTO Change ;
+    BTFSS intersection_state,2 ;is E/W_DETECTED bit set high = skip
+    GOTO Change ;if low goto change
+    BTFSS intersection_state,1 ;is N/W_DETECTED bit set high =skip
+    GOTO Remain ;goto Remain if N/W bit is low
+    GOTO Change ;goto Change if N/W and E/W bits high
 NS_Green:
-    BTFSS intersection_state,1 ;
-    GOTO Change ;
-    BTFSS intersection_state,2 ;
-    GOTO Remain ;
+    BTFSS intersection_state,1 ;is N/S bit set high = skip
+    GOTO Change ;if N/S bit low then goto change
+    BTFSS intersection_state,2 ;is E/W bit set high = skip goto change
+    GOTO Remain ;if E/W low there is no car, N/s has traffic
 Change:
-    BSF intersection_state,3 ;
-    GOTO Done ;
+    BSF intersection_state,3 ;turn On the TRANSITION bit to switch output pattern yellow
+    GOTO Done
 Remain:
-    BTFSS intersection_state,0 ;
-    GOTO NS_Remain ;
+    BTFSS intersection_state,0 ;check DIRECTION again before we clear the register
+    GOTO NS_Remain ;we keep N/S green
 EW_Remain:
     CLRF intersection_state ;clear everything
     BSF intersection_state,0 ;only select direction E/W
-    GOTO Done ;
+    GOTO Done
 NS_Remain:
-    CLRF intersection_state ;
+    CLRF intersection_state ;clear the register for a fresh start
 Done:
-    BSF INTCON,7 ;
-    RETURN ;
+    BSF INTCON,7 ;turn on the interrupts
+    RETURN ;go back to main where Decide was called from
+
+;Finish: runs when STATE_COUNT hits 12 - the 1 second of yellow
+;is over. Swap which direction is green and reset everything.
+
 Finish:
     BCF INTCON,7 ;protect this the same way Decide does
     BTFSS intersection_state,0 ;which way was green before this?
@@ -2460,12 +2466,12 @@ FinishDone:
     BSF INTCON,7 ;interrupts back on
     RETURN
 
-; Decode_Lights: looks at DIRECTION and TRANSITION and turns on
-; the matching traffic lights on PORTA. Called every pass through
-; Main so PORTA always matches the current state.
+;Decode_Lights: looks at DIRECTION and TRANSITION and turns on
+;the matching traffic lights on PORTA. Called every pass through
+;Main so PORTA always matches the current state.
 
 Decode_Lights:
-    BTFSS intersection_state,3 ;is TRANSITION (yellow flag) on?
+    BTFSS intersection_state,3 ;is TRANSITION yellow flag on
     GOTO Green_Phase ;no we're in a green/red phase
     GOTO Yellow_Phase ;yes we're in a yellow/red phase
 Green_Phase:
@@ -2477,22 +2483,22 @@ Yellow_Phase:
     GOTO Set_NSYellow
     GOTO Set_EWYellow
 Set_NSGreen:
-    MOVLW 0x0C ;((PORTA) and 07Fh), 2 on (N/S green), ((PORTA) and 07Fh), 3 on (E/W red)
+    MOVLW 0b00001100 ;((PORTA) and 07Fh), 2 on (N/S green), ((PORTA) and 07Fh), 3 on (E/W red)
     GOTO Store_Lights
 Set_EWGreen:
-    MOVLW 0x21 ;((PORTA) and 07Fh), 0 on (N/S red), ((PORTA) and 07Fh), 5 on (E/W green)
+    MOVLW 0b00100001 ;((PORTA) and 07Fh), 0 on (N/S red), ((PORTA) and 07Fh), 5 on (E/W green)
     GOTO Store_Lights
 Set_NSYellow:
-    MOVLW 0x0A ;((PORTA) and 07Fh), 1 on (N/S yellow), ((PORTA) and 07Fh), 3 on (E/W red)
+    MOVLW 0b00001010 ;((PORTA) and 07Fh), 1 on (N/S yellow), ((PORTA) and 07Fh), 3 on (E/W red)
     GOTO Store_Lights
 Set_EWYellow:
-    MOVLW 0x11 ;((PORTA) and 07Fh), 0 on (N/S red), ((PORTA) and 07Fh), 4 on (E/W yellow)
+    MOVLW 0b00010001 ;((PORTA) and 07Fh), 0 on (N/S red), ((PORTA) and 07Fh), 4 on (E/W yellow)
 Store_Lights:
     MOVWF PORTA ;takes moved values and then displays on the LEDs
     RETURN
 
-; ISR - runs any time an interrupt fires. Right now the only thing
-; that should be able to interrupt is Timer1.
+;ISR - runs any time an interrupt fires. Right now the only thing
+;that should be able to interrupt is Timer1.
 
 IsrHandler:
     ; save
@@ -2501,7 +2507,7 @@ IsrHandler:
     MOVWF STATUS_TEMP ;save swapped STATUS
 
     ; button caused interrupt
-    BTFSC PIR1,0
+    BTFSC PIR1,0 ;if Timer1 roll over flag set call handler
     CALL Service_Timer1
 
     ; restore
@@ -2512,13 +2518,13 @@ IsrHandler:
     RETFIE
 
 Service_Timer1:
-    BCF PIR1,0 ;
-    MOVLW 0x0B ;
-    MOVWF TMR1H ;
-    MOVLW 0xDC ;
-    MOVWF TMR1L ;
-    MOVWF 0x10 ;
-    ADDWF intersection_state,F ;
-    RETURN
+    BCF PIR1,0 ;clear Timer1 flag
+    MOVLW 0x0B ;reload timer 1 with the 500ms count
+    MOVWF TMR1H ;load into the higher Timer1 bits
+    MOVLW 0xDC ;reload timer one with the rrest of the count
+    MOVWF TMR1L ;load into the lower Timer1 bits
+    MOVWF 0x10 ;increment the upper bits if intersection_state
+    ADDWF intersection_state,F ;add increments the upper bits
+    RETURN ;return to ISR
 
     End
