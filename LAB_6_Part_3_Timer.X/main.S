@@ -78,10 +78,12 @@ Main:
     ANDLW   0x0F                   ;pull STATE_COUNT into TEMP_COUNTANDLW 0x0F
                                    ;then wipes out the garbage left in the top half
     MOVWF   TEMP_COUNT             ;save the ANDLW in TEMP_COUNT to compare
+    
     MOVF    TEMP_COUNT,W
     XORLW   10
     BTFSC   STATUS,2               ;count is 10 which will be 5.0 s of green elapsed
     CALL    Decide                 ;after 5s we need to decide to change to yellow
+    
     MOVF    TEMP_COUNT,W
     XORLW   12                     ;2 more interrupts atter the 10
     BTFSC   STATUS,2               ;count is 12 which will be 1.0 s of yellow elapsed
